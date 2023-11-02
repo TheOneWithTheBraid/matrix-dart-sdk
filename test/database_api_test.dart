@@ -40,7 +40,7 @@ void main() {
   });
 }
 
-Future<SqfliteDatabase> openInMemoryFfiSqfliteDatabase(Client? _) async {
+Future<SQfLiteDatabase> openInMemoryFfiSqfliteDatabase(Client? _) async {
   final fileSystem = MemoryFileSystem();
   final path = '${fileSystem.path}/build/.test_store/${Random().nextDouble()}';
   final database = await databaseFactoryFfi.openDatabase(
@@ -50,9 +50,8 @@ Future<SqfliteDatabase> openInMemoryFfiSqfliteDatabase(Client? _) async {
       onCreate: DbTablesExtension.create,
     ),
   );
-  return SqfliteDatabase(
+  return SQfLiteDatabase(
     database,
-    fileStoragePath: null,
     maxFileSize: 0,
   );
 }

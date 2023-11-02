@@ -1,6 +1,7 @@
 /*
  *   Famedly Matrix SDK
  *   Copyright (C) 2021 Famedly GmbH
+ *   Copyright (C) 2023 x-tention Informationstechnologie GmbH
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU Affero General Public License as
@@ -18,7 +19,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:sqflite_common/sqflite.dart';
@@ -31,7 +31,7 @@ import 'package:matrix/matrix.dart';
 import 'package:matrix/src/utils/queued_to_device_event.dart';
 import 'package:matrix/src/utils/run_benchmarked.dart';
 
-class SqfliteDatabase extends DatabaseApi {
+class SQfLiteDatabase extends DatabaseApi {
   final Database database;
 
   Transaction? _currentTransaction;
@@ -41,38 +41,18 @@ class SqfliteDatabase extends DatabaseApi {
   DatabaseExecutor get _executor => _currentTransaction ?? database;
 
   @override
-  bool get supportsFileStoring => fileStoragePath != null;
+  final bool supportsFileStoring = false;
   @override
   final int maxFileSize;
-  final Directory? fileStoragePath;
 
-  SqfliteDatabase(
-    this.database, {
-    required this.fileStoragePath,
-    required this.maxFileSize,
+  SQfLiteDatabase(this.database, {
+    this.maxFileSize = 1 * 1024 * 1024,
     this.deleteFilesAfterDuration,
   });
 
-  static Future<SqfliteDatabase> databaseBuilder(
-    String path, {
-    Directory? fileStoragePath,
-    int maxFileSize = 1 * 1024 * 1024,
-    Duration? deleteFilesAfterDuration,
-  }) async =>
-      SqfliteDatabase(
-        await openDatabase(
-          path,
-          version: 1,
-          onCreate: DbTablesExtension.create,
-        ),
-        fileStoragePath: fileStoragePath,
-        maxFileSize: maxFileSize,
-        deleteFilesAfterDuration: deleteFilesAfterDuration,
-      );
-
   @override
-  Future<void> addSeenDeviceId(
-          String userId, String deviceId, String publicKeys) =>
+  Future<void> addSeenDeviceId(String userId, String deviceId,
+      String publicKeys) =>
       _executor.insert(
         DbTables.seenDeviceIds.name,
         {
@@ -95,7 +75,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future<void> clear() => transaction(() async {
+  Future<void> clear() =>
+      transaction(() async {
         for (final table in DbTables.values) {
           await _executor.delete(table.name);
         }
@@ -123,44 +104,28 @@ class SqfliteDatabase extends DatabaseApi {
   }
 
   @override
-  Future clearSSSSCache() => _executor.delete(DbTables.ssssCache.name);
+  Future<void> clearSSSSCache() => _executor.delete(DbTables.ssssCache.name);
 
   @override
   Future<void> close() => database.close();
 
   @override
-  Future deleteFromToDeviceQueue(int id) => _executor.delete(
+  Future<void> deleteFromToDeviceQueue(int id) =>
+      _executor.delete(
         DbTables.toDeviceQueue.name,
         where: 'id=?',
         whereArgs: [id],
       );
 
   @override
-  Future<void> deleteOldFiles(int savedAt) async {
-    final dir = fileStoragePath;
-    final deleteFilesAfterDuration = this.deleteFilesAfterDuration;
-    if (!supportsFileStoring ||
-        dir == null ||
-        deleteFilesAfterDuration == null) {
-      return;
-    }
-    final entities = await dir.list().toList();
-    for (final file in entities) {
-      final stat = await file.stat();
-      if (DateTime.now().difference(stat.modified) > deleteFilesAfterDuration) {
-        Logs().v('Delete old file', file.path);
-        await file.delete();
-      }
-    }
-  }
-
-  @override
-  Future<String?> deviceIdSeen(userId, deviceId) => _executor.query(
+  Future<String?> deviceIdSeen(userId, deviceId) =>
+      _executor.query(
         DbTables.seenDeviceIds.name,
         where: 'user_id = ? AND device_id = ?',
         whereArgs: [userId, deviceId],
       ).then(
-          (rows) => rows.isEmpty ? null : rows.first['public_key'] as String);
+              (rows) =>
+          rows.isEmpty ? null : rows.first['public_key'] as String);
 
   @override
   Future<String> exportDump() {
@@ -198,18 +163,20 @@ class SqfliteDatabase extends DatabaseApi {
   Future<Map<String, BasicEvent>> getAccountData() =>
       runBenchmarked<Map<String, BasicEvent>>(
         'Get all account data from store',
-        () => _executor.query(DbTables.accountData.name).then(
-              (rows) => Map.fromEntries(
-                rows.map(
-                  (row) {
-                    final accountData = BasicEvent(
-                      type: row['type'] as String,
-                      content: jsonDecode(row['content'] as String),
-                    );
-                    return MapEntry(accountData.type, accountData);
-                  },
-                ),
-              ),
+            () =>
+            _executor.query(DbTables.accountData.name).then(
+                  (rows) =>
+                  Map.fromEntries(
+                    rows.map(
+                          (row) {
+                        final accountData = BasicEvent(
+                          type: row['type'] as String,
+                          content: jsonDecode(row['content'] as String),
+                        );
+                        return MapEntry(accountData.type, accountData);
+                      },
+                    ),
+                  ),
             ),
       );
 
@@ -219,7 +186,8 @@ class SqfliteDatabase extends DatabaseApi {
           rows.map((row) => StoredInboundGroupSession.fromJson(row)).toList());
 
   @override
-  Future<Map<String, Map>> getAllOlmSessions() => _executor
+  Future<Map<String, Map>> getAllOlmSessions() =>
+      _executor
           .query(
         DbTables.olmSessions.name,
       )
@@ -239,48 +207,51 @@ class SqfliteDatabase extends DatabaseApi {
     if (rows.isEmpty) return null;
     return Map.fromEntries(
       rows.map(
-        (row) => MapEntry(
-          row['key'].toString(),
-          row['value'].toString(),
-        ),
+            (row) =>
+            MapEntry(
+              row['key'].toString(),
+              row['value'].toString(),
+            ),
       ),
     );
   }
 
   @override
-  Future<Event?> getEventById(String eventId, Room room) => _executor
-      .query(
+  Future<Event?> getEventById(String eventId, Room room) =>
+      _executor
+          .query(
         DbTables.timelineEvents.name,
         where: 'event_id = ?',
         whereArgs: [eventId],
         orderBy: 'sort_order',
       )
-      .then((rows) =>
-          rows.isEmpty ? null : EventAdapter.fromRow(rows.single, room));
+          .then((rows) =>
+      rows.isEmpty ? null : EventAdapter.fromRow(rows.single, room));
 
   @override
   Future<List<String>> getEventIdList(Room room,
-          {int start = 0, bool includeSending = false, int? limit}) =>
+      {int start = 0, bool includeSending = false, int? limit}) =>
       _executor
           .query(
-            DbTables.timelineEvents.name,
-            columns: ['event_id'],
-            where: 'room_id = ?',
-            whereArgs: [room.id],
-            limit: limit,
-            offset: start == 0 ? null : start,
-            orderBy: 'sort_order DESC',
-          )
+        DbTables.timelineEvents.name,
+        columns: ['event_id'],
+        where: 'room_id = ?',
+        whereArgs: [room.id],
+        limit: limit,
+        offset: start == 0 ? null : start,
+        orderBy: 'sort_order DESC',
+      )
           .then(
               (rows) => rows.map((row) => row['event_id'] as String).toList());
 
   @override
   Future<List<Event>> getEventList(Room room,
-          {int start = 0, bool onlySending = false, int? limit}) =>
+      {int start = 0, bool onlySending = false, int? limit}) =>
       runBenchmarked<List<Event>>(
           'Get event list',
-          () => _executor
-              .query(
+              () =>
+              _executor
+                  .query(
                 DbTables.timelineEvents.name,
                 where: 'room_id = ?',
                 whereArgs: [room.id],
@@ -288,30 +259,19 @@ class SqfliteDatabase extends DatabaseApi {
                 offset: start == 0 ? null : start,
                 orderBy: 'sort_order DESC',
               )
-              .then((rows) =>
+                  .then((rows) =>
                   rows.map((row) => EventAdapter.fromRow(row, room)).toList()));
 
   @override
-  Future<Uint8List?> getFile(Uri mxcUri) async {
-    final fileStoragePath = this.fileStoragePath;
-    if (!supportsFileStoring || fileStoragePath == null) return null;
-
-    final file =
-        File('${fileStoragePath.path}/${mxcUri.toString().split('/').last}');
-
-    if (await file.exists()) return await file.readAsBytes();
-    return null;
-  }
-
-  @override
-  Future<StoredInboundGroupSession?> getInboundGroupSession(
-          String roomId, String sessionId) =>
+  Future<StoredInboundGroupSession?> getInboundGroupSession(String roomId,
+      String sessionId) =>
       _executor.query(
         DbTables.inboundGroupSessions.name,
         where: 'room_id = ? AND session_id = ?',
         whereArgs: [roomId, sessionId],
       ).then(
-        (rows) => rows.isEmpty
+            (rows) =>
+        rows.isEmpty
             ? null
             : StoredInboundGroupSession.fromJson(rows.first),
       );
@@ -326,18 +286,19 @@ class SqfliteDatabase extends DatabaseApi {
           rows.map((row) => StoredInboundGroupSession.fromJson(row)).toList());
 
   @override
-  Future<List<String>> getLastSentMessageUserDeviceKey(
-          String userId, String deviceId) =>
+  Future<List<String>> getLastSentMessageUserDeviceKey(String userId,
+      String deviceId) =>
       _executor
           .query(
-            DbTables.userDeviceKeys.name,
-            columns: ['last_sent_message'],
-            where: 'user_id = ? AND device_id = ?',
-            whereArgs: [userId, deviceId],
-          )
-          .then((rows) => rows.isEmpty
-              ? <String>[]
-              : <String>[rows.first['last_sent_message'] as String]);
+        DbTables.userDeviceKeys.name,
+        columns: ['last_sent_message'],
+        where: 'user_id = ? AND device_id = ?',
+        whereArgs: [userId, deviceId],
+      )
+          .then((rows) =>
+      rows.isEmpty
+          ? <String>[]
+          : <String>[rows.first['last_sent_message'] as String]);
 
   @override
   Future<List<OlmSession>> getOlmSessions(String identityKey, String userId) =>
@@ -349,24 +310,25 @@ class SqfliteDatabase extends DatabaseApi {
           rows.map((row) => OlmSession.fromJson(row, userId)).toList());
 
   @override
-  Future<List<OlmSession>> getOlmSessionsForDevices(
-          List<String> identityKeys, String userId) =>
+  Future<List<OlmSession>> getOlmSessionsForDevices(List<String> identityKeys,
+      String userId) =>
       _executor
           .query(
-            DbTables.olmSessions.name,
-            where:
-                'identity_key IN (${identityKeys.map((_) => '?').join(', ')})',
-            whereArgs: identityKeys,
-          )
+        DbTables.olmSessions.name,
+        where:
+        'identity_key IN (${identityKeys.map((_) => '?').join(', ')})',
+        whereArgs: identityKeys,
+      )
           .then((rows) =>
-              rows.map((row) => OlmSession.fromJson(row, userId)).toList());
+          rows.map((row) => OlmSession.fromJson(row, userId)).toList());
 
   @override
-  Future<OutboundGroupSession?> getOutboundGroupSession(
-          String roomId, String userId) =>
+  Future<OutboundGroupSession?> getOutboundGroupSession(String roomId,
+      String userId) =>
       _executor.query(DbTables.outboundGroupSessions.name,
-          where: 'room_id = ?', whereArgs: [roomId]).then((rows) => rows
-              .isEmpty
+          where: 'room_id = ?', whereArgs: [roomId]).then((rows) =>
+      rows
+          .isEmpty
           ? null
           : OutboundGroupSession.fromJson(rows.first, userId));
 
@@ -377,22 +339,23 @@ class SqfliteDatabase extends DatabaseApi {
         final rawRooms = await _executor.query(DbTables.rooms.name);
 
         final rawRoomAccountData =
-            await _executor.query(DbTables.roomAccountData.name);
+        await _executor.query(DbTables.roomAccountData.name);
 
         final importantRoomStates = await _executor.query(
           DbTables.stateEvents.name,
           where:
-              'type IN (${client.importantStateEvents.map((_) => '?').join(', ')})',
+          'type IN (${client.importantStateEvents.map((_) => '?').join(', ')})',
           whereArgs: client.importantStateEvents.toList(),
         );
 
         // Create rooms Map
         final rooms = Map<String, Room>.fromEntries(
           rawRooms.map(
-            (rawRoom) => MapEntry(
-              rawRoom['id'] as String,
-              RoomAdapter.fromRow(rawRoom, client),
-            ),
+                (rawRoom) =>
+                MapEntry(
+                  rawRoom['id'] as String,
+                  RoomAdapter.fromRow(rawRoom, client),
+                ),
           ),
         );
 
@@ -417,7 +380,8 @@ class SqfliteDatabase extends DatabaseApi {
       });
 
   @override
-  Future<SSSSCache?> getSSSSCache(String type) => _executor.query(
+  Future<SSSSCache?> getSSSSCache(String type) =>
+      _executor.query(
         DbTables.ssssCache.name,
         where: 'type = ?',
         whereArgs: [type],
@@ -432,7 +396,8 @@ class SqfliteDatabase extends DatabaseApi {
       where: 'id = ?',
       whereArgs: [roomId],
     ).then(
-      (rows) => rows.isEmpty ? null : RoomAdapter.fromRow(rows.first, client),
+          (rows) =>
+      rows.isEmpty ? null : RoomAdapter.fromRow(rows.first, client),
     );
     if (room == null) return null;
 
@@ -440,11 +405,11 @@ class SqfliteDatabase extends DatabaseApi {
     if (loadImportantStates) {
       final states = await _executor
           .query(
-            DbTables.stateEvents.name,
-            where:
-                'type IN (${client.importantStateEvents.map((_) => '?').join(', ')})',
-            whereArgs: client.importantStateEvents.toList(),
-          )
+        DbTables.stateEvents.name,
+        where:
+        'type IN (${client.importantStateEvents.map((_) => '?').join(', ')})',
+        whereArgs: client.importantStateEvents.toList(),
+      )
           .then((rows) => rows.map((row) => EventAdapter.fromRow(row, room)));
       states.forEach(room.setState);
     }
@@ -458,12 +423,13 @@ class SqfliteDatabase extends DatabaseApi {
           rows.map((row) => QueuedToDeviceEvent.fromJson(row)).toList());
 
   @override
-  Future<List<Event>> getUnimportantRoomEventStatesForRoom(
-          List<String> events, Room room) =>
+  Future<List<Event>> getUnimportantRoomEventStatesForRoom(List<String> events,
+      Room room) =>
       _executor.query(
         DbTables.stateEvents.name,
         where:
-            'room_id = ? AND type NOT IN (?, ${room.client.importantStateEvents.map((_) => '?').join(', ')})',
+        'room_id = ? AND type NOT IN (?, ${room.client.importantStateEvents
+            .map((_) => '?').join(', ')})',
         whereArgs: [
           room.id,
           EventTypes.RoomMember,
@@ -473,13 +439,16 @@ class SqfliteDatabase extends DatabaseApi {
           rows.map((row) => EventAdapter.fromRow(row, room)).toList());
 
   @override
-  Future<User?> getUser(String userId, Room room) => _executor.query(
+  Future<User?> getUser(String userId, Room room) =>
+      _executor.query(
         DbTables.stateEvents.name,
         where: 'room_id = ? AND state_key = ? AND type = ?',
         whereArgs: [room.id, userId, EventTypes.RoomMember],
       ).then(
-        (rows) =>
-            rows.isEmpty ? null : EventAdapter.fromRow(rows.first, room).asUser,
+            (rows) =>
+        rows.isEmpty ? null : EventAdapter
+            .fromRow(rows.first, room)
+            .asUser,
       );
 
   @override
@@ -487,11 +456,11 @@ class SqfliteDatabase extends DatabaseApi {
       runBenchmarked<Map<String, DeviceKeysList>>(
           'Get all user device keys from store', () async {
         final userDeviceKeysInfo =
-            await _executor.query(DbTables.userDeviceKeysInfo.name);
+        await _executor.query(DbTables.userDeviceKeysInfo.name);
         final userDeviceKeys =
-            await _executor.query(DbTables.userDeviceKeys.name);
+        await _executor.query(DbTables.userDeviceKeys.name);
         final userCrossSigningKeys =
-            await _executor.query(DbTables.userCrossSigningKeys.name);
+        await _executor.query(DbTables.userCrossSigningKeys.name);
 
         final userDeviceKeysMap = <String, DeviceKeysList>{};
 
@@ -514,13 +483,17 @@ class SqfliteDatabase extends DatabaseApi {
       });
 
   @override
-  Future<List<User>> getUsers(Room room) => _executor.query(
+  Future<List<User>> getUsers(Room room) =>
+      _executor.query(
         DbTables.stateEvents.name,
         where: 'room_id = ? AND type = ?',
         whereArgs: [room.id, EventTypes.RoomMember],
       ).then(
-        (rows) =>
-            rows.map((row) => EventAdapter.fromRow(row, room).asUser).toList(),
+            (rows) =>
+            rows.map((row) =>
+            EventAdapter
+                .fromRow(row, room)
+                .asUser).toList(),
       );
 
   @override
@@ -530,15 +503,14 @@ class SqfliteDatabase extends DatabaseApi {
   }
 
   @override
-  Future insertClient(
-          String name,
-          String homeserverUrl,
-          String token,
-          String userId,
-          String? deviceId,
-          String? deviceName,
-          String? prevBatch,
-          String? olmAccount) =>
+  Future<void> insertClient(String name,
+      String homeserverUrl,
+      String token,
+      String userId,
+      String? deviceId,
+      String? deviceName,
+      String? prevBatch,
+      String? olmAccount) =>
       transaction(() async {
         final batch = _executor.batch();
         batch.insert(
@@ -593,7 +565,8 @@ class SqfliteDatabase extends DatabaseApi {
       });
 
   @override
-  Future insertIntoToDeviceQueue(String type, String txnId, String content) =>
+  Future<void> insertIntoToDeviceQueue(String type, String txnId,
+      String content) =>
       _executor.insert(DbTables.toDeviceQueue.name, {
         'type': type,
         'txn_id': txnId,
@@ -601,7 +574,8 @@ class SqfliteDatabase extends DatabaseApi {
       });
 
   @override
-  Future markInboundGroupSessionAsUploaded(String roomId, String sessionId) =>
+  Future<void> markInboundGroupSessionAsUploaded(String roomId,
+      String sessionId) =>
       _executor.update(
         DbTables.inboundGroupSessions.name,
         {'uploaded': 'true'},
@@ -610,34 +584,38 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future markInboundGroupSessionsAsNeedingUpload() => _executor.update(
+  Future<void> markInboundGroupSessionsAsNeedingUpload() =>
+      _executor.update(
         DbTables.inboundGroupSessions.name,
         {'uploaded': false.toString()},
       );
 
   @override
-  Future<String?> publicKeySeen(String publicKey) => _executor.query(
+  Future<String?> publicKeySeen(String publicKey) =>
+      _executor.query(
         DbTables.seenDeviceKeys.name,
         where: 'public_key = ?',
         whereArgs: [publicKey],
       ).then((rows) => rows.isEmpty ? null : rows.first['device_id'] as String);
 
   @override
-  Future removeEvent(String eventId, String roomId) => _executor.delete(
+  Future<void> removeEvent(String eventId, String roomId) =>
+      _executor.delete(
         DbTables.timelineEvents.name,
         where: 'event_id = ?',
         whereArgs: [eventId],
       );
 
   @override
-  Future removeOutboundGroupSession(String roomId) => _executor.delete(
+  Future<void> removeOutboundGroupSession(String roomId) =>
+      _executor.delete(
         DbTables.outboundGroupSessions.name,
         where: 'room_id = ?',
         whereArgs: [roomId],
       );
 
   @override
-  Future removeUserCrossSigningKey(String userId, String publicKey) =>
+  Future<void> removeUserCrossSigningKey(String userId, String publicKey) =>
       _executor.delete(
         DbTables.userCrossSigningKeys.name,
         where: 'user_id = ? AND public_key = ?',
@@ -645,7 +623,7 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future removeUserDeviceKey(String userId, String deviceId) =>
+  Future<void> removeUserDeviceKey(String userId, String deviceId) =>
       _executor.delete(
         DbTables.userDeviceKeys.name,
         where: 'user_id = ? AND device_id = ?',
@@ -653,8 +631,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future setBlockedUserCrossSigningKey(
-          bool blocked, String userId, String publicKey) =>
+  Future<void> setBlockedUserCrossSigningKey(bool blocked, String userId,
+      String publicKey) =>
       _executor.update(
         DbTables.userCrossSigningKeys.name,
         {'blocked': blocked.toString()},
@@ -663,8 +641,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future setBlockedUserDeviceKey(
-          bool blocked, String userId, String deviceId) =>
+  Future<void> setBlockedUserDeviceKey(bool blocked, String userId,
+      String deviceId) =>
       _executor.update(
         DbTables.userDeviceKeys.name,
         {'blocked': blocked.toString()},
@@ -673,8 +651,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future setLastActiveUserDeviceKey(
-          int lastActive, String userId, String deviceId) =>
+  Future<void> setLastActiveUserDeviceKey(int lastActive, String userId,
+      String deviceId) =>
       _executor.update(
         DbTables.userDeviceKeys.name,
         {'last_active': lastActive},
@@ -683,8 +661,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future setLastSentMessageUserDeviceKey(
-          String lastSentMessage, String userId, String deviceId) =>
+  Future<void> setLastSentMessageUserDeviceKey(String lastSentMessage,
+      String userId, String deviceId) =>
       _executor.update(
         DbTables.userDeviceKeys.name,
         {'last_sent_message': lastSentMessage},
@@ -693,7 +671,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future setRoomPrevBatch(String prevBatch, String roomId, Client client) =>
+  Future<void> setRoomPrevBatch(String? prevBatch, String roomId,
+      Client client) =>
       _executor.update(
         DbTables.rooms.name,
         {'prev_batch': prevBatch},
@@ -702,8 +681,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future setVerifiedUserCrossSigningKey(
-          bool verified, String userId, String publicKey) =>
+  Future<void> setVerifiedUserCrossSigningKey(bool verified, String userId,
+      String publicKey) =>
       _executor.update(
         DbTables.userCrossSigningKeys.name,
         {'verified': verified.toString()},
@@ -712,8 +691,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future setVerifiedUserDeviceKey(
-          bool verified, String userId, String deviceId) =>
+  Future<void> setVerifiedUserDeviceKey(bool verified, String userId,
+      String deviceId) =>
       _executor.update(
         DbTables.userDeviceKeys.name,
         {'verified': verified.toString()},
@@ -722,7 +701,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future storeAccountData(String type, String content) => _executor.insert(
+  Future<void> storeAccountData(String type, String content) =>
+      _executor.insert(
         DbTables.accountData.name,
         {'type': type, 'content': content},
         conflictAlgorithm: ConflictAlgorithm.replace,
@@ -731,22 +711,22 @@ class SqfliteDatabase extends DatabaseApi {
   Future<int> _getMinSortOrder(String roomId) async {
     return (await _executor
         .query(
-          DbTables.timelineEvents.name,
-          columns: ['MIN(sort_order)'],
-          where: 'room_id = ?',
-          whereArgs: [roomId],
-        )
+      DbTables.timelineEvents.name,
+      columns: ['MIN(sort_order)'],
+      where: 'room_id = ?',
+      whereArgs: [roomId],
+    )
         .then((rows) => rows.first['MIN(sort_order)'] as int? ?? 0));
   }
 
   Future<int> _getMaxSortOrder(String roomId) async {
     return (await _executor
         .query(
-          DbTables.timelineEvents.name,
-          columns: ['MAX(sort_order)'],
-          where: 'room_id = ?',
-          whereArgs: [roomId],
-        )
+      DbTables.timelineEvents.name,
+      columns: ['MAX(sort_order)'],
+      where: 'room_id = ?',
+      whereArgs: [roomId],
+    )
         .then((rows) => rows.first['MAX(sort_order)'] as int? ?? 0));
   }
 
@@ -762,7 +742,7 @@ class SqfliteDatabase extends DatabaseApi {
     if (eventUpdate.content['type'] == EventTypes.Redaction) {
       final eventId = eventUpdate.content.tryGet<String>('redacts');
       final event =
-          eventId != null ? await getEventById(eventId, tmpRoom) : null;
+      eventId != null ? await getEventById(eventId, tmpRoom) : null;
       if (event != null) {
         event.setRedactionEvent(event);
         await _executor.update(
@@ -818,7 +798,7 @@ class SqfliteDatabase extends DatabaseApi {
           DbTables.timelineEvents.name,
           event.toRow(),
           where:
-              'event_id = ? AND room_id = ? AND (status <= ? OR (status == 0 AND ? == -1))',
+          'event_id = ? AND room_id = ? AND (status <= ? OR (status == 0 AND ? == -1))',
           whereArgs: [eventId, tmpRoom.id, newStatus, newStatus],
         );
       }
@@ -853,27 +833,14 @@ class SqfliteDatabase extends DatabaseApi {
   }
 
   @override
-  Future<void> storeFile(Uri mxcUri, Uint8List bytes, int time) async {
-    final fileStoragePath = this.fileStoragePath;
-    if (!supportsFileStoring || fileStoragePath == null) return;
-
-    final file =
-        File('${fileStoragePath.path}/${mxcUri.toString().split('/').last}');
-
-    if (await file.exists()) return;
-    await file.writeAsBytes(bytes);
-  }
-
-  @override
-  Future storeInboundGroupSession(
-          String roomId,
-          String sessionId,
-          String pickle,
-          String content,
-          String indexes,
-          String allowedAtIndex,
-          String senderKey,
-          String senderClaimedKey) =>
+  Future<void> storeInboundGroupSession(String roomId,
+      String sessionId,
+      String pickle,
+      String content,
+      String indexes,
+      String allowedAtIndex,
+      String senderKey,
+      String senderClaimedKey) =>
       _executor.insert(
         DbTables.inboundGroupSessions.name,
         StoredInboundGroupSession(
@@ -891,8 +858,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future storeOlmSession(String identityKey, String sessionId, String pickle,
-          int lastReceived) =>
+  Future<void> storeOlmSession(String identityKey, String sessionId,
+      String pickle, int lastReceived) =>
       _executor.insert(
         DbTables.olmSessions.name,
         {
@@ -905,8 +872,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future storeOutboundGroupSession(
-          String roomId, String pickle, String deviceIds, int creationTime) =>
+  Future<void> storeOutboundGroupSession(String roomId, String pickle,
+      String deviceIds, int creationTime) =>
       _executor.insert(
         DbTables.outboundGroupSessions.name,
         {
@@ -919,15 +886,16 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future storePrevBatch(String prevBatch) => _executor.insert(
+  Future<void> storePrevBatch(String prevBatch) =>
+      _executor.insert(
         DbTables.client.name,
         {'key': 'prev_batch', 'value': prevBatch},
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
   @override
-  Future<void> storeRoomUpdate(
-      String roomId, SyncRoomUpdate roomUpdate, Client client) async {
+  Future<void> storeRoomUpdate(String roomId, SyncRoomUpdate roomUpdate,
+      Client client) async {
     // Leave room if membership is leave
     if (roomUpdate is LeftRoomUpdate) {
       await forgetRoom(roomId);
@@ -936,26 +904,26 @@ class SqfliteDatabase extends DatabaseApi {
     final membership = roomUpdate is LeftRoomUpdate
         ? Membership.leave
         : roomUpdate is InvitedRoomUpdate
-            ? Membership.invite
-            : Membership.join;
+        ? Membership.invite
+        : Membership.join;
 
     final room = roomUpdate is JoinedRoomUpdate
         ? Room(
-            client: client,
-            id: roomId,
-            membership: membership,
-            highlightCount:
-                roomUpdate.unreadNotifications?.highlightCount?.toInt() ?? 0,
-            notificationCount:
-                roomUpdate.unreadNotifications?.notificationCount?.toInt() ?? 0,
-            prev_batch: roomUpdate.timeline?.prevBatch,
-            summary: roomUpdate.summary,
-          )
+      client: client,
+      id: roomId,
+      membership: membership,
+      highlightCount:
+      roomUpdate.unreadNotifications?.highlightCount?.toInt() ?? 0,
+      notificationCount:
+      roomUpdate.unreadNotifications?.notificationCount?.toInt() ?? 0,
+      prev_batch: roomUpdate.timeline?.prevBatch,
+      summary: roomUpdate.summary,
+    )
         : Room(
-            client: client,
-            id: roomId,
-            membership: membership,
-          );
+      client: client,
+      id: roomId,
+      membership: membership,
+    );
 
     final roomExists = await _executor.insert(
       DbTables.rooms.name,
@@ -973,7 +941,7 @@ class SqfliteDatabase extends DatabaseApi {
           if (roomUpdate is JoinedRoomUpdate &&
               roomUpdate.unreadNotifications?.notificationCount != null)
             'notification_count':
-                roomUpdate.unreadNotifications?.notificationCount,
+            roomUpdate.unreadNotifications?.notificationCount,
           if (roomUpdate is JoinedRoomUpdate &&
               roomUpdate.unreadNotifications?.highlightCount != null)
             'highlight_count': roomUpdate.unreadNotifications?.highlightCount,
@@ -999,8 +967,8 @@ class SqfliteDatabase extends DatabaseApi {
   }
 
   @override
-  Future storeSSSSCache(
-          String type, String keyId, String ciphertext, String content) =>
+  Future<void> storeSSSSCache(String type, String keyId, String ciphertext,
+      String content) =>
       _executor.insert(
         DbTables.ssssCache.name,
         SSSSCache(
@@ -1013,15 +981,16 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future storeSyncFilterId(String syncFilterId) => _executor.insert(
+  Future<void> storeSyncFilterId(String syncFilterId) =>
+      _executor.insert(
         DbTables.client.name,
         {'key': 'sync_filter_id', 'value': syncFilterId},
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
   @override
-  Future storeUserCrossSigningKey(String userId, String publicKey,
-          String content, bool verified, bool blocked) =>
+  Future<void> storeUserCrossSigningKey(String userId, String publicKey,
+      String content, bool verified, bool blocked) =>
       _executor.insert(
         DbTables.userCrossSigningKeys.name,
         {
@@ -1035,8 +1004,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future storeUserDeviceKey(String userId, String deviceId, String content,
-          bool verified, bool blocked, int lastActive) =>
+  Future<void> storeUserDeviceKey(String userId, String deviceId,
+      String content, bool verified, bool blocked, int lastActive) =>
       _executor.insert(
         DbTables.userDeviceKeys.name,
         {
@@ -1051,7 +1020,7 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future storeUserDeviceKeysInfo(String userId, bool outdated) =>
+  Future<void> storeUserDeviceKeysInfo(String userId, bool outdated) =>
       _executor.insert(
         DbTables.userDeviceKeysInfo.name,
         {
@@ -1118,14 +1087,13 @@ class SqfliteDatabase extends DatabaseApi {
   }
 
   @override
-  Future updateClient(
-          String homeserverUrl,
-          String token,
-          String userId,
-          String? deviceId,
-          String? deviceName,
-          String? prevBatch,
-          String? olmAccount) =>
+  Future<void> updateClient(String homeserverUrl,
+      String token,
+      String userId,
+      String? deviceId,
+      String? deviceName,
+      String? prevBatch,
+      String? olmAccount) =>
       transaction(() async {
         final batch = _executor.batch();
         batch.update(
@@ -1182,7 +1150,8 @@ class SqfliteDatabase extends DatabaseApi {
       });
 
   @override
-  Future updateClientKeys(String olmAccount) => _executor.update(
+  Future<void> updateClientKeys(String olmAccount) =>
+      _executor.update(
         DbTables.client.name,
         {'value': olmAccount},
         where: 'key = ?',
@@ -1190,8 +1159,8 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future updateInboundGroupSessionAllowedAtIndex(
-          String allowedAtIndex, String roomId, String sessionId) =>
+  Future<void> updateInboundGroupSessionAllowedAtIndex(String allowedAtIndex,
+      String roomId, String sessionId) =>
       _executor.update(
         DbTables.inboundGroupSessions.name,
         {'allowed_at_index': allowedAtIndex},
@@ -1200,14 +1169,24 @@ class SqfliteDatabase extends DatabaseApi {
       );
 
   @override
-  Future updateInboundGroupSessionIndexes(
-          String indexes, String roomId, String sessionId) =>
+  Future<void> updateInboundGroupSessionIndexes(String indexes, String roomId,
+      String sessionId) =>
       _executor.update(
         DbTables.inboundGroupSessions.name,
         {'indexes': indexes},
         where: 'room_id = ? AND session_id = ?',
         whereArgs: [roomId, sessionId],
       );
+
+  @override
+  Future<void> deleteOldFiles(int savedAt) => throw UnimplementedError();
+
+  @override
+  Future<Uint8List?> getFile(Uri mxcUri) => throw UnimplementedError();
+
+  @override
+  Future<void> storeFile(Uri mxcUri, Uint8List bytes, int time) =>
+      throw UnimplementedError();
 }
 
 extension RoomAdapter on Room {
@@ -1223,14 +1202,16 @@ extension RoomAdapter on Room {
     );
   }
 
-  Map<String, Object?> toRow() => {
+  Map<String, Object?> toRow() =>
+      {
         ...toJson(),
         'summary': jsonEncode(summary.toJson()),
       };
 }
 
 extension EventAdapter on Event {
-  static Event fromRow(Map<String, Object?> row, Room room) => Event.fromJson(
+  static Event fromRow(Map<String, Object?> row, Room room) =>
+      Event.fromJson(
         {
           ...row,
           'content': jsonDecode(row['content'] as String),
@@ -1244,7 +1225,8 @@ extension EventAdapter on Event {
         room,
       );
 
-  Map<String, Object?> toRow() => {
+  Map<String, Object?> toRow() =>
+      {
         ...toJson(),
         if (stateKey != null) 'state_key': stateKey,
         if (prevContent?.isNotEmpty == true)
@@ -1258,7 +1240,8 @@ extension EventAdapter on Event {
 }
 
 extension on StoredInboundGroupSession {
-  Map<String, Object?> toRow() => {
+  Map<String, Object?> toRow() =>
+      {
         ...toJson(),
         'uploaded': uploaded.toString(),
       };
