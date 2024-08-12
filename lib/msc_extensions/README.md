@@ -19,6 +19,7 @@ Please try to cover the following conventions:
 
 - MSC 1236 - Widget API V2
 - MSC 2835 - UIA login
+- MSC 3575 - Sliding Sync
 - MSC 3814 - Dehydrated Devices
 - MSC 3935 - Cute Events
 - `io.element.recent_emoji` - recent emoji sync in account data
