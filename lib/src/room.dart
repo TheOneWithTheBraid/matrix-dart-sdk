@@ -208,15 +208,15 @@ class Room {
       if (ownUser != null) await requestUser(ownUser.senderId);
     }
 
-    var heroes = summary.mHeroes;
-    if (heroes == null) {
+    final heroes = summary.mHeroes ?? [];
+    if (heroes.isEmpty) {
       final directChatMatrixID = this.directChatMatrixID;
       if (directChatMatrixID != null) {
-        heroes = [directChatMatrixID];
+        heroes.add(directChatMatrixID);
+      } else {
+        return [];
       }
     }
-
-    if (heroes == null) return [];
 
     return await Future.wait(
       heroes.map(
@@ -249,8 +249,10 @@ class Room {
     }
 
     final directChatMatrixID = this.directChatMatrixID;
-    final heroes = summary.mHeroes ??
-        (directChatMatrixID == null ? [] : [directChatMatrixID]);
+    final heroes = summary.mHeroes ?? [];
+    if (directChatMatrixID != null && heroes.isEmpty) {
+      heroes.add(directChatMatrixID);
+    }
     if (heroes.isNotEmpty) {
       final result = heroes
           .where(
